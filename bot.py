@@ -12,7 +12,7 @@ from quorum_data_py import feed
 from quorum_fullnode_py import FullNode
 
 logger = logging.getLogger(__name__)
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 logger.info("Version %s", __version__)
 
 
@@ -76,9 +76,9 @@ class GroupStatisticsBot:
 
     def post_status(self, day: str = None):
         """post status to group, default is yesterday's status, day: %Y-%m-%d"""
-        day = day or datetime.datetime.now() + datetime.timedelta(days=-1).strftime(
-            "%Y-%m-%d"
-        )
+        if not day:
+            yesterday = datetime.datetime.now() + datetime.timedelta(days=-1)
+            day = yesterday.strftime("%Y-%m-%d")
         logger.info("try to post status to group %s at %s", self.group_name, day)
         self.update_status()
         if day not in self.data["to_group"] and day in self.data["block"]:
