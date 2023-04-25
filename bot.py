@@ -10,9 +10,10 @@ import os
 
 from quorum_data_py import feed
 from quorum_fullnode_py import FullNode
+from quorum_mininode_py import MiniNode
 
 logger = logging.getLogger(__name__)
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 logger.info("Version %s", __version__)
 
 
@@ -28,11 +29,19 @@ def timestamp_to_beijing_day(timestamp):
 class GroupStatisticsBot:
     """group statistics bot"""
 
-    def __init__(self, client: FullNode, group_id: str, data_file: str):
+    def __init__(
+        self,
+        client: FullNode,
+        group_id: str,
+        data_file: str,
+        pvtkey: str = None,
+    ):
+        """默认用 group owner 来发布，如果传入 pvtkey 就以指定密钥发布"""
         self.rum = client
         self.rum.group_id = group_id
         self.group_name = self.rum.api.group_info()["group_name"]
         self.data_file = data_file
+        self.pvtkey = pvtkey
 
         if not os.path.exists(data_file):
             self.data = {
@@ -81,8 +90,19 @@ class GroupStatisticsBot:
             day = yesterday.strftime("%Y-%m-%d")
         logger.info("try to post status to group %s at %s", self.group_name, day)
         self.update_status()
+        # check_date
+        dt_to_post = datetime.datetime.strptime(day, "%Y-%m-%d") + datetime.timedelta(
+            hours=32
+        )
+        if datetime.datetime.now() < dt_to_post:
+            logger.info("not yet")
+            return
         if day not in self.data["to_group"] and day in self.data["block"]:
             content = f"当前区块高度 {self.data['process']}，已连接 {len(self.rum.api.group_network() or [])} 个节点。{day} 概况：新增 {self.data['block'][day]} 个区块、{self.data['trx'][day]} 条 Trxs，当天活跃 {len(self.data['user'][day])} 个账号。"
+            if self.pvtkey:
+                self.rum = MiniNode(
+                    self.rum.api.seed(self.rum.group_id, True), self.pvtkey
+                )
             resp = self.rum.api.post_content(feed.new_post(content))
             if "trx_id" in resp:
                 self.data["to_group"][day] = resp["trx_id"]
